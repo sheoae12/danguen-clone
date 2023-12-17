@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppDataSource, DataSourceConfig } from './datasource';
 
 @Module({
     imports: [
@@ -8,19 +9,28 @@ import { TypeOrmModule } from '@nestjs/typeorm';
             imports: [ConfigModule],
             inject: [ConfigService],
             useFactory: (configService: ConfigService) => {
+                const configs = DataSourceConfig(configService);
                 return {
-                    type: 'mysql',
-                    host: configService.get<string>('db.host'),
-                    port: configService.get<number>('db.port'),
-                    database: configService.get<string>('db.name'),
-                    username: configService.get<string>('db.username'),
-                    password: configService.get<string>('db.password'),
-                    synchronize: false,
-                    logging: true,
-                    entities: ['dist/entities/*.entity.js']
+                    ...configs,
+                    synchronize: false
                 };
             }
         })
-    ]
+    ],
+    providers: [Logger]
 })
-export class DatabaseModule {}
+export class DatabaseModule {
+    constructor(
+        private configService: ConfigService,
+        logger: Logger
+    ) {
+        const DataSource = AppDataSource(configService);
+        DataSource.initialize()
+            .then(() => {
+                logger.log('Data Source has been initialized!', 'DatabaseModule');
+            })
+            .catch((err) => {
+                logger.error('Error during Data Source initialization', err);
+            });
+    }
+}
